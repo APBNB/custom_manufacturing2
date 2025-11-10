@@ -113,7 +113,8 @@ def _get_numeric_child_fields(doctype: str) -> list[str]:
     numeric_fields = [
         df.fieldname
         for df in meta.fields
-        if df.fieldtype in NUMERIC_FIELD_TYPES or str(df.fieldname).isdigit()
+        if (df.fieldtype in NUMERIC_FIELD_TYPES or str(df.fieldname).isdigit())
+        and df.fieldname != "total"
     ]
     return numeric_fields
 

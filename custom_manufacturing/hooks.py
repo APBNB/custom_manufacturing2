@@ -36,7 +36,16 @@ fixtures = [
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/custom_manufacturing/css/custom_manufacturing.css"
-# app_include_js = "/assets/custom_manufacturing/js/custom_manufacturing.js"
+
+doctype_js = {
+    "Work Order": "public/js/work_order.js",
+    "Job Card": "public/js/job_card.js"
+}
+
+override_doctype_class = {
+	"Work Order": "custom_manufacturing.override.work_order.WorkOrder",
+	"Job Card": "custom_manufacturing.override.job_card.JobCard"
+}
 
 # include js, css files in header of web template
 # web_include_css = "/assets/custom_manufacturing/css/custom_manufacturing.css"

@@ -1,16 +1,10 @@
 """Custom Work Order hooks."""
 
 from __future__ import annotations
-
 from collections.abc import Iterable
-
 import frappe
 from frappe.utils import cint
-
-from erpnext.manufacturing.doctype.work_order.work_order import (
-    create_job_card,
-)
-
+from custom_manufacturing.override.work_order import create_job_card
 
 def on_submit(doc, _method: str | None = None) -> None:
     """Auto-create job cards for every workstation/shift combination on submit."""
@@ -67,6 +61,13 @@ def on_submit(doc, _method: str | None = None) -> None:
 
                 job_card = create_job_card(doc, row, auto_create=True)
 
+                if job_card:
+                    if row.custom_shift_number:
+                        job_card.custom_shift_number = row.custom_shift_number
+                    job_card.status = "Open"
+                    job_card.flags.ignore_validate_update_after_submit = True
+                    job_card.save(ignore_permissions=True)
+
                 scrap_rows = scrap_by_bom.get(bom_no)
                 if scrap_rows is None:
                     scrap_rows = _get_bom_scrap_items(bom_no)
@@ -112,7 +113,6 @@ def _apply_scrap_items(job_card, scrap_rows: list[frappe._dict]) -> None:
         return
 
     job_card.set("scrap_items", [])
-
     for row in scrap_rows:
         job_card.append(
             "scrap_items",
