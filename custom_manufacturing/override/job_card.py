@@ -148,43 +148,43 @@ class JobCard(Document):
 		self.validate_weight_table()
 
 	def validate_weight_table(self):
-		"""Validate weight per bag table constraints"""
 		if not self.get('custom_weight_per_bag'):
 			return
 		
 		weight_table = self.get('custom_weight_per_bag')
-		total_rows = len(weight_table)
+		weight_columns = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
 		
-		for index, row in enumerate(weight_table):
-			# Calculate row total
+		last_filled_row_idx = None
+		last_filled_column = None
+		
+		for row in weight_table:
+			for col in weight_columns:
+				if (row.get(col) or 0) > 0:
+					last_filled_row_idx = row.idx
+					last_filled_column = col
+		
+		for row in weight_table:
 			total = (row.get('1') or 0) + (row.get('2') or 0) + (row.get('3') or 0) + \
 					(row.get('4') or 0) + (row.get('5') or 0) + (row.get('6') or 0) + \
 					(row.get('7') or 0) + (row.get('8') or 0) + (row.get('9') or 0)
 			
-			# Update total column
 			row.total = total
 			
-			# Check if total exceeds 1000
 			if total > 1000:
 				frappe.throw(
 					_("Row {0}: Total weight ({1}) cannot exceed 1000").format(row.idx, total)
 				)
 			
-			# Check if it's the last row (highest index)
-			is_last_row = (index == total_rows - 1)
-			
-			# Validate multiples of 50 for all columns except last row
-			if not is_last_row:
-				weight_columns = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
+			for col in weight_columns:
+				value = row.get(col) or 0
+				is_last_cell = (row.idx == last_filled_row_idx and col == last_filled_column)
 				
-				for col in weight_columns:
-					value = row.get(col) or 0
-					if value > 0 and value % 50 != 0:
-						frappe.throw(
-							_("Row {0}, Column {1}: Value ({2}) must be a multiple of 50. Last row can have any value.").format(
-								row.idx, col, value
-							)
+				if value > 0 and not is_last_cell and value % 50 != 0:
+					frappe.throw(
+						_("Row {0}, Column {1}: Value ({2}) must be a multiple of 50. Only the last filled cell in the table can have any value.").format(
+							row.idx, col, value
 						)
+					)
 	def on_update(self):
 		self.validate_job_card_qty()
 
@@ -1344,33 +1344,3 @@ def make_corrective_job_card(source_name, operation=None, for_operation=None, ta
 	return doclist
 
 	
-def validate_weight_table(self):
-    """Validate weight per bag table constraints"""
-    weight_table = self.get('custom_weight_per_bag')
-    if not weight_table:
-        return
-    
-    total_rows = len(weight_table)
-    weight_columns = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
-    
-    for index, row in enumerate(weight_table):
-        total = sum(row.get(col) or 0 for col in weight_columns)
-        
-        row.total = total
-        
-        if total > 1000:
-            frappe.throw(
-                _("Row {0}: Total weight ({1}) cannot exceed 1000").format(row.idx, total)
-            )
-        
-        if index == total_rows - 1:
-            continue
-        
-        for col in weight_columns:
-            value = row.get(col) or 0
-            if value > 0 and value % 50 != 0:
-                frappe.throw(
-                    _("Row {0}, Column {1}: Value ({2}) must be a multiple of 50. Last row can have any value.").format(
-                        row.idx, col, value
-                    )
-                )
