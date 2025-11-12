@@ -128,15 +128,10 @@ def _update_workstation_hours(doc: Document, delta: float) -> None:
         return
 
     delta = flt(delta)
-
-    frappe.db.sql(
-        """
-        UPDATE `tabWorkstation`
-        SET custom_worked_hours = GREATEST(IFNULL(custom_worked_hours, 0) + %(delta)s, 0)
-        WHERE name = %(workstation)s
-        """,
-        {"delta": delta, "workstation": workstation},
-    )
+    workstation_doc = frappe.get_doc("Workstation", workstation)
+    current_hours = flt(workstation_doc.custom_worked_hours or 0)
+    workstation_doc.custom_worked_hours = max(current_hours + delta, 0)
+    workstation_doc.save(ignore_permissions=True)
 
 
 def _ensure_shift_time_log(doc: Document) -> None:

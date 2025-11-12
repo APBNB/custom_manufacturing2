@@ -8,6 +8,179 @@ if (window.cur_frm && cur_frm.doctype === "Job Card") {
 	cur_frm.events = {};
 }
 
+const GLR_TIME_FIELDS = [
+	"custom_from",
+	"custom_to",
+	"custom_from_time",
+	"custom_to_time",
+	"custom_from_time3",
+	"custom_to_time3",
+	"custom_from_time5",
+	"custom_to_time_5",
+	"custom_from_time_7",
+	"custom_to_time_7",
+	"custom_from_time9",
+	"custom_to_time9",
+	"custom_from_time11",
+	"custom_to_time11_",
+	"custom_from_time14",
+	"custom_to_time14",
+];
+
+// Mapping of from-to fields to their duration fields
+const GLR_DURATION_MAPPINGS = [
+	{ from: "custom_from", to: "custom_to", duration: "custom_duration" },
+	{ from: "custom_from_time", to: "custom_to_time", duration: "custom_duration2" },
+	{ from: "custom_from_time_7", to: "custom_to_time_7", duration: "custom_duration3" },
+	{ from: "custom_from_time9", to: "custom_to_time9", duration: "custom_duration4" },
+	{ from: "custom_from_time11", to: "custom_to_time11_", duration: "custom_duration5" },
+	{ from: "custom_from_time14", to: "custom_to_time14", duration: "custom_duration7" },
+];
+
+const set_next_glr_time = (frm) => {
+	if (!frm) {
+		return;
+	}
+
+	if (frm.doc.docstatus !== 0) {
+		frappe.msgprint({
+			message: __("You can only record times while the Job Card is in Draft."),
+			indicator: "orange",
+		});
+		return;
+	}
+
+	const fieldname = GLR_TIME_FIELDS.find((name) => !frm.doc[name]);
+
+	if (!fieldname) {
+		frappe.msgprint({
+			message: __("All GLR time fields already have values."),
+			indicator: "green",
+		});
+		return;
+	}
+
+	const now = frappe.datetime.now_time();
+
+	frm.set_value(fieldname, now).then(() => {
+		const docfield = frappe.meta.get_docfield(frm.doctype, fieldname, frm.docname);
+		const label = docfield?.label || frappe.model.unscrub(fieldname);
+
+		frappe.show_alert({
+			message: __("Recorded {0} as {1}", [__(label), now]),
+			indicator: "green",
+		});
+
+		// After setting the time, check if we need to calculate duration
+		GLR_DURATION_MAPPINGS.forEach((mapping, index) => {
+			if (mapping.from === fieldname || mapping.to === fieldname) {
+				// Small delay to ensure the value is set
+				setTimeout(() => {
+					calculate_glr_duration(frm, mapping);
+				}, 100);
+			}
+		});
+	});
+};
+
+const style_glr_record_button = (frm) => {
+	const field = frm.fields_dict?.custom_record_time;
+
+	if (!field?.$wrapper || !field.$input) {
+		return;
+	}
+
+	if (!field.$wrapper.hasClass("glr-record-styled")) {
+		const inputWrapper = field.$wrapper.find(".control-input-wrapper");
+
+		inputWrapper.css({
+			display: "flex",
+			"justify-content": "flex-end",
+		});
+
+		field.$input
+			.removeClass("btn-default")
+			.addClass("btn-glr-record")
+			.css({
+				"background-color": "#000",
+				color: "#fff",
+				"font-weight": "700",
+				border: "1px solid #000",
+			});
+
+		field.$wrapper.addClass("glr-record-styled");
+	}
+};
+
+// Helper function to add minutes to time string (HH:MM or HH:MM:SS)
+const add_minutes_to_time = (time_str, minutes) => {
+	if (!time_str) return null;
+	
+	// Parse the time string
+	const today = moment().format("YYYY-MM-DD");
+	const datetime = moment(`${today} ${time_str}`, "YYYY-MM-DD HH:mm:ss");
+	
+	if (!datetime.isValid()) {
+		return null;
+	}
+	
+	// Add minutes
+	datetime.add(minutes, 'minutes');
+	
+	// Return in HH:mm format
+	return datetime.format("HH:mm");
+};
+
+// Function to populate recording time fields with intervals
+const populate_recording_times = (frm, interval_minutes = 20) => {
+	const base_time = frm.doc.custom_recording_time;
+	
+	if (!base_time) {
+		return;
+	}
+	
+	const time_fields = [
+		'custom_recording_time1',
+		'custom_recording_time2',
+		'custom_recording_time3',
+		'custom_recording_time4',
+		'custom_recording_time5',
+		'custom_recording_time6',
+		'custom_recording_time7',
+		'custom_recording_time8'
+	];
+	
+	time_fields.forEach((field, index) => {
+		const minutes_to_add = (index + 1) * interval_minutes;
+		const new_time = add_minutes_to_time(base_time, minutes_to_add);
+		
+		if (new_time) {
+			frm.set_value(field, new_time);
+		}
+	});
+	
+	frappe.show_alert({
+		message: __('Recording times populated with {0} minute intervals', [interval_minutes]),
+		indicator: 'green'
+	});
+};
+
+const calculate_glr_duration = (frm, mapping) => {
+	const from_time = frm.doc[mapping.from];
+	const to_time = frm.doc[mapping.to];
+	
+	if (from_time && to_time) {
+		const duration = get_minutes_diff(from_time, to_time);
+		frm.set_value(mapping.duration, duration);
+	}
+};
+
+const calculate_all_glr_durations = (frm) => {
+	GLR_DURATION_MAPPINGS.forEach((mapping, index) => {
+		calculate_glr_duration(frm, mapping);
+	});
+};
+
 frappe.ui.form.on("Job Card", {
 	setup: function (frm) {
 		frm.set_query("operation", function () {
@@ -49,8 +222,6 @@ frappe.ui.form.on("Job Card", {
 
 	refresh: function (frm) {
 		frappe.flags.pause_job = 0;
-        console.log("working ");
-        
 		frappe.flags.resume_job = 0;
 		let has_items = frm.doc.items && frm.doc.items.length;
 
@@ -157,6 +328,20 @@ frappe.ui.form.on("Job Card", {
 				};
 			};
 		}
+
+		style_glr_record_button(frm);
+	},
+
+	onload_post_render: function (frm) {
+		style_glr_record_button(frm);
+	},
+
+	custom_record_time: function (frm) {
+		set_next_glr_time(frm);
+	},
+
+	custom_recording_time: function (frm) {
+		populate_recording_times(frm, 20);
 	},
 
 	setup_quality_inspection: function (frm) {
@@ -400,6 +585,8 @@ frappe.ui.form.on("Job Card", {
 		if ((!frm.doc.time_logs || !frm.doc.time_logs.length) && frm.doc.started_time) {
 			frm.trigger("reset_timer");
 		}
+
+		calculate_all_glr_durations(frm);
 	},
 
 	reset_timer: function (frm) {
@@ -531,6 +718,43 @@ frappe.ui.form.on("Job Card", {
 
 		refresh_field("total_completed_qty");
 	},
+
+	custom_from: function(frm) {
+		calculate_glr_duration(frm, GLR_DURATION_MAPPINGS[0]);
+	},
+	custom_to: function(frm) {
+		calculate_glr_duration(frm, GLR_DURATION_MAPPINGS[0]);
+	},
+	custom_from_time: function(frm) {
+		calculate_glr_duration(frm, GLR_DURATION_MAPPINGS[1]);
+	},
+	custom_to_time: function(frm) {
+		calculate_glr_duration(frm, GLR_DURATION_MAPPINGS[1]);
+	},
+	custom_from_time_7: function(frm) {
+		calculate_glr_duration(frm, GLR_DURATION_MAPPINGS[2]);
+	},
+	custom_to_time_7: function(frm) {
+		calculate_glr_duration(frm, GLR_DURATION_MAPPINGS[2]);
+	},
+	custom_from_time9: function(frm) {
+		calculate_glr_duration(frm, GLR_DURATION_MAPPINGS[3]);
+	},
+	custom_to_time9: function(frm) {
+		calculate_glr_duration(frm, GLR_DURATION_MAPPINGS[3]);
+	},
+	custom_from_time11: function(frm) {
+		calculate_glr_duration(frm, GLR_DURATION_MAPPINGS[4]);
+	},
+	custom_to_time11_: function(frm) {
+		calculate_glr_duration(frm, GLR_DURATION_MAPPINGS[4]);
+	},
+	custom_from_time14: function(frm) {
+		calculate_glr_duration(frm, GLR_DURATION_MAPPINGS[5]);
+	},
+	custom_to_time14: function(frm) {
+		calculate_glr_duration(frm, GLR_DURATION_MAPPINGS[5]);
+	},
 });
 
 frappe.ui.form.on("Job Card Time Log", {
@@ -545,6 +769,18 @@ frappe.ui.form.on("Job Card Time Log", {
 
 function get_seconds_diff(d1, d2) {
 	return moment(d1).diff(d2, "seconds");
+}
+
+function get_minutes_diff(time1, time2) {
+	if (!time1 || !time2) {
+		return 0;
+	}
+
+	const today = moment().format("YYYY-MM-DD");
+	const datetime1 = moment(`${today} ${time1}`, "YYYY-MM-DD HH:mm:ss");
+	const datetime2 = moment(`${today} ${time2}`, "YYYY-MM-DD HH:mm:ss");
+	const diff = Math.abs(datetime1.diff(datetime2, "minutes"));
+	return diff;
 }
 
 

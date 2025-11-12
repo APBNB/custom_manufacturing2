@@ -7,9 +7,7 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
-  "shift_number",
-  "from_time",
-  "to_time"
+  "shift_number"
  ],
  "fields": [
   {
@@ -17,23 +15,13 @@
    "fieldtype": "Data",
    "label": "Shift Number",
    "unique": 1
-  },
-  {
-   "fieldname": "from_time",
-   "fieldtype": "Time",
-   "label": "From Time"
-  },
-  {
-   "fieldname": "to_time",
-   "fieldtype": "Time",
-   "label": "To Time"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-10-24 17:07:54.210443",
- "modified_by": "dakshkothari18@gmail.com",
+ "modified": "2025-11-06 15:22:26.190857",
+ "modified_by": "daksh.kothari@apbnb.com",
  "module": "Custom Manufacturing",
  "name": "Shift",
  "naming_rule": "By fieldname",
