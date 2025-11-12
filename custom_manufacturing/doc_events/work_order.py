@@ -1,10 +1,14 @@
 """Custom Work Order hooks."""
 
 from __future__ import annotations
+
+from collections import defaultdict
 from collections.abc import Iterable
+
 import frappe
-from frappe.utils import cint
+
 from custom_manufacturing.override.work_order import create_job_card
+
 
 def on_submit(doc, _method: str | None = None) -> None:
     """Auto-create job cards for every workstation/shift combination on submit."""
@@ -15,13 +19,11 @@ def on_submit(doc, _method: str | None = None) -> None:
     if not shifts:
         return
 
-    workstations = _get_workstations(doc.custom_plant_name)
-    if not workstations:
-        return
-
     operations = list(doc.get("operations") or [])
     if not operations:
         return
+
+    workstations_by_operation = _get_workstations_grouped(doc.custom_plant_name)
 
     existing = {
         (row.operation_id, row.workstation, row.custom_shift_number)
@@ -34,8 +36,16 @@ def on_submit(doc, _method: str | None = None) -> None:
 
     scrap_by_bom: dict[str, list[frappe._dict]] = {}
 
+    fallback_workstations = workstations_by_operation.get(None, [])
+
     for op in operations:
-        for workstation in workstations:
+        matched_workstations = workstations_by_operation.get(op.operation, [])
+        if not matched_workstations:
+            matched_workstations = fallback_workstations
+        if not matched_workstations:
+            continue
+
+        for workstation in matched_workstations:
             for shift in shifts:
                 key = (op.name, workstation.name, shift.name)
                 if key in existing:
@@ -83,13 +93,24 @@ def _get_shifts() -> Iterable[frappe._dict]:
     return frappe.get_all("Shift", fields=["name"], order_by="name asc")
 
 
-def _get_workstations(plant_name: str) -> Iterable[frappe._dict]:
-    return frappe.get_all(
+def _get_workstations_grouped(plant_name: str) -> dict[str, list[frappe._dict]]:
+    """Return plant workstations keyed by the operation they are linked to."""
+    if not plant_name:
+        return {}
+
+    workstations = frappe.get_all(
         "Workstation",
         filters={"plant_floor": plant_name},
-        fields=["name", "workstation_type"],
+        fields=["name", "workstation_type", "custom_operation_linking"],
         order_by="name asc",
     )
+
+    grouped: dict[str | None, list[frappe._dict]] = defaultdict(list)
+    for workstation in workstations:
+        operation_name = workstation.custom_operation_linking or None
+        grouped[operation_name].append(workstation)
+
+    return grouped
 
 
 def _get_bom_scrap_items(bom_no: str | None) -> list[frappe._dict]:

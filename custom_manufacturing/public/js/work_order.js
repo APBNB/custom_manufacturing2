@@ -311,12 +311,28 @@ frappe.ui.form.on("Work Order", {
 					read_only: 0,
 					in_list_view: 1,
 					get_query: function (doc, cdt, cdn) {
-						const row = (locals[cdt] && locals[cdt][cdn]) || {};
+						const grid_rows =
+							(dialog.fields_dict.operations.grid &&
+								dialog.fields_dict.operations.grid.grid_rows_by_docname) ||
+							{};
+						const grid_row = grid_rows[cdn];
+						const row = (grid_row && grid_row.doc) || (locals[cdt] && locals[cdt][cdn]) || {};
 						const filters = {};
 
-						if (row.workstation_type) filters.workstation_type = row.workstation_type;
-						if (frm.doc.custom_plant_name) filters.plant_floor = frm.doc.custom_plant_name;
-						if (row.operation) filters.custom_operation_linking = row.operation;
+						// Filter by operation from the current row
+						if (row.operation) {
+							filters.custom_operation_linking = row.operation;
+						}
+
+						// Filter by workstation type if available
+						if (row.workstation_type) {
+							filters.workstation_type = row.workstation_type;
+						}
+
+						// Filter by plant from the parent document
+						if (frm.doc.custom_plant_name) {
+							filters.plant_floor = frm.doc.custom_plant_name;
+						}
 
 						return { filters };
 					},
@@ -394,6 +410,7 @@ frappe.ui.form.on("Work Order", {
 	);
 
 	dialog.fields_dict["operations"].grid.grid_buttons.hide();
+
 
 	// --- Responsive column alignment fix ---
 	setTimeout(() => {
