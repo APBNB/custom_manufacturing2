@@ -9,6 +9,10 @@ fixtures = [
         "doctype": "Custom Field",
         "filters": [["dt", "in", ["Work Order", "Job Card", "Workstation","Shift","Warehouse"]]],
     },
+     {
+        "doctype": "Property Setter",
+        "filters": [["doc_type", "in", ["Work Order", "Job Card", "Workstation", "Shift", "Warehouse"]]],
+    },
 ]
 
 
