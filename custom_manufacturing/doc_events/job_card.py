@@ -13,6 +13,37 @@ from frappe.utils import flt, getdate, get_time, today
 
 NUMERIC_FIELD_TYPES: set[str] = {"Float", "Currency", "Int", "Percent"}
 
+GLR_TIME_FIELDS: tuple[str, ...] = (
+	"custom_from",
+	"custom_to",
+	"custom_from_time",
+	"custom_to_time",
+	"custom_from_time3",
+	"custom_to_time3",
+	"custom_from_time5",
+	"custom_to_time_5",
+	"custom_from_time_7",
+	"custom_to_time_7",
+	"custom_from_time9",
+	"custom_to_time9",
+	"custom_from_time11",
+	"custom_to_time11_",
+	"custom_from_time14",
+	"custom_to_time14",
+)
+
+GLR_RECORDING_TIME_FIELDS: tuple[str, ...] = (
+	"custom_recording_time",
+	"custom_recording_time1",
+	"custom_recording_time2",
+	"custom_recording_time3",
+	"custom_recording_time4",
+	"custom_recording_time5",
+	"custom_recording_time6",
+	"custom_recording_time7",
+	"custom_recording_time8",
+)
+
 
 def sync_weight_totals(doc: Document, _method: str | None = None) -> None:
 	"""Keep the target quantity aligned with bag weights without overriding production totals."""
@@ -76,6 +107,16 @@ def sync_weight_totals(doc: Document, _method: str | None = None) -> None:
 		key = row.get("name") or row.get("idx")
 		if key in prev_qty_map:
 			row.completed_qty = prev_qty_map[key]
+
+
+def clear_glr_time_defaults(doc: Document, _method: str | None = None) -> None:
+	"""Overwrite Frappe's default 'current time' values for GLR fields on insert."""
+	if not doc or doc.operation != "GLR":
+		return
+
+	for fieldname in (*GLR_TIME_FIELDS, *GLR_RECORDING_TIME_FIELDS):
+		if doc.meta.has_field(fieldname):
+			doc.set(fieldname, None)
 
 
 def on_submit(doc: Document, _method: str | None = None) -> None:

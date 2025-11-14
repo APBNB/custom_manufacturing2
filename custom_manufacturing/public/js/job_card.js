@@ -112,59 +112,6 @@ const style_glr_record_button = (frm) => {
 	}
 };
 
-// Helper function to add minutes to time string (HH:MM or HH:MM:SS)
-const add_minutes_to_time = (time_str, minutes) => {
-	if (!time_str) return null;
-	
-	// Parse the time string
-	const today = moment().format("YYYY-MM-DD");
-	const datetime = moment(`${today} ${time_str}`, "YYYY-MM-DD HH:mm:ss");
-	
-	if (!datetime.isValid()) {
-		return null;
-	}
-	
-	// Add minutes
-	datetime.add(minutes, 'minutes');
-	
-	// Return in HH:mm format
-	return datetime.format("HH:mm");
-};
-
-// Function to populate recording time fields with intervals
-const populate_recording_times = (frm, interval_minutes = 20) => {
-	const base_time = frm.doc.custom_recording_time;
-	
-	if (!base_time) {
-		return;
-	}
-	
-	const time_fields = [
-		'custom_recording_time1',
-		'custom_recording_time2',
-		'custom_recording_time3',
-		'custom_recording_time4',
-		'custom_recording_time5',
-		'custom_recording_time6',
-		'custom_recording_time7',
-		'custom_recording_time8'
-	];
-	
-	time_fields.forEach((field, index) => {
-		const minutes_to_add = (index + 1) * interval_minutes;
-		const new_time = add_minutes_to_time(base_time, minutes_to_add);
-		
-		if (new_time) {
-			frm.set_value(field, new_time);
-		}
-	});
-	
-	frappe.show_alert({
-		message: __('Recording times populated with {0} minute intervals', [interval_minutes]),
-		indicator: 'green'
-	});
-};
-
 const calculate_glr_duration = (frm, mapping) => {
 	const from_time = frm.doc[mapping.from];
 	const to_time = frm.doc[mapping.to];
@@ -340,8 +287,67 @@ frappe.ui.form.on("Job Card", {
 		set_next_glr_time(frm);
 	},
 
-	custom_recording_time: function (frm) {
-		populate_recording_times(frm, 20);
+	custom_stream_pressure_kgcm2: function(frm) {
+		if (frm.doc.custom_stream_pressure_kgcm2) {
+			const now = frappe.datetime.now_time().substring(0, 5); // Get HH:MM format
+			frm.set_value('custom_recording_time', now);
+		}
+	},
+
+	custom_stream_pressure_kgcm21: function(frm) {
+		if (frm.doc.custom_stream_pressure_kgcm21) {
+			const now = frappe.datetime.now_time().substring(0, 5);
+			frm.set_value('custom_recording_time1', now);
+		}
+	},
+
+	custom_stream_pressure_kgcm22: function(frm) {
+		if (frm.doc.custom_stream_pressure_kgcm22) {
+			const now = frappe.datetime.now_time().substring(0, 5);
+			frm.set_value('custom_recording_time2', now);
+		}
+	},
+
+	custom_stream_pressure_kgcm23: function(frm) {
+		if (frm.doc.custom_stream_pressure_kgcm23) {
+			const now = frappe.datetime.now_time().substring(0, 5);
+			frm.set_value('custom_recording_time3', now);
+		}
+	},
+
+	custom_stream_pressure_kgcm24: function(frm) {
+		if (frm.doc.custom_stream_pressure_kgcm24) {
+			const now = frappe.datetime.now_time().substring(0, 5);
+			frm.set_value('custom_recording_time4', now);
+		}
+	},
+
+	custom_stream_pressure_kgcm25: function(frm) {
+		if (frm.doc.custom_stream_pressure_kgcm25) {
+			const now = frappe.datetime.now_time().substring(0, 5);
+			frm.set_value('custom_recording_time5', now);
+		}
+	},
+
+	custom_stream_pressure_kgcm26: function(frm) {
+		if (frm.doc.custom_stream_pressure_kgcm26) {
+			const now = frappe.datetime.now_time().substring(0, 5);
+			frm.set_value('custom_recording_time6', now);
+		}
+	},
+
+	custom_stream_pressure_kgcm27: function(frm) {
+		if (frm.doc.custom_stream_pressure_kgcm27) {
+			const now = frappe.datetime.now_time().substring(0, 5);
+			frm.set_value('custom_recording_time7', now);
+		}
+	},
+
+	custom_stream_pressure_kgcm28: function(frm) {
+		if (frm.doc.custom_stream_pressure_kgcm28) {
+			const now = frappe.datetime.now_time().substring(0, 5);
+			frm.set_value('custom_recording_time8', now);
+		}
 	},
 
 	setup_quality_inspection: function (frm) {

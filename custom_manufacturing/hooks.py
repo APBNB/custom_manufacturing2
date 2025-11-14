@@ -9,10 +9,14 @@ fixtures = [
         "doctype": "Custom Field",
         "filters": [["dt", "in", ["Work Order", "Job Card", "Workstation","Shift","Warehouse"]]],
     },
-     {
+    {
         "doctype": "Property Setter",
         "filters": [["doc_type", "in", ["Work Order", "Job Card", "Workstation", "Shift", "Warehouse"]]],
     },
+    {
+        "doctype": "Webhook",
+        "filters": [["doc_type", "in", ["Work Order", "Job Card", "Workstation", "Shift", "Warehouse"]]],
+    }
 ]
 
 
@@ -42,12 +46,17 @@ fixtures = [
 
 doctype_js = {
     "Work Order": "public/js/work_order.js",
-    "Job Card": "public/js/job_card.js"
+    "Job Card": "public/js/job_card.js",
 }
 
 override_doctype_class = {
 	"Work Order": "custom_manufacturing.override.work_order.WorkOrder",
 	"Job Card": "custom_manufacturing.override.job_card.JobCard"
+}
+scheduler_events = {
+    "daily": [
+        "custom_manufacturing.scheduler.job_card_cleanup.delete_old_open_job_cards"
+    ]
 }
 
 # include js, css files in header of web template
@@ -161,6 +170,7 @@ override_doctype_class = {
 
 doc_events = {
     "Job Card": {
+        "before_insert": "custom_manufacturing.doc_events.job_card.clear_glr_time_defaults",
         "before_save": "custom_manufacturing.doc_events.job_card.sync_weight_totals",
         "on_submit": "custom_manufacturing.doc_events.job_card.on_submit",
         "on_cancel": "custom_manufacturing.doc_events.job_card.on_cancel",
