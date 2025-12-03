@@ -23,6 +23,7 @@ frappe.ui.form.on("Work Order", {
 			return {
 				filters: {
 					company: frm.doc.company,
+					custom_plant: frm.doc.custom_plant_name
 				},
 			};
 		});

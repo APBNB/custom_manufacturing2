@@ -13,37 +13,53 @@ from frappe.utils import flt, getdate, get_time, today
 
 NUMERIC_FIELD_TYPES: set[str] = {"Float", "Currency", "Int", "Percent"}
 
-GLR_TIME_FIELDS: tuple[str, ...] = (
-	"custom_from",
-	"custom_to",
-	"custom_from_time",
-	"custom_to_time",
-	"custom_from_time3",
-	"custom_to_time3",
-	"custom_from_time5",
-	"custom_to_time_5",
-	"custom_from_time_7",
-	"custom_to_time_7",
-	"custom_from_time9",
-	"custom_to_time9",
-	"custom_from_time11",
-	"custom_to_time11_",
-	"custom_from_time14",
-	"custom_to_time14",
-)
+ALL_TIME_FIELDS: tuple[str, ...] = (
+    # --- GLR ---
+    "custom_from",
+    "custom_to",
+    "custom_from_time",
+    "custom_to_time",
+    "custom_from_time3",
+    "custom_to_time3",
+    "custom_from_time5",
+    "custom_to_time_5",
+    "custom_from_time_7",
+    "custom_to_time_7",
+    "custom_from_time9",
+    "custom_to_time9",
+    "custom_from_time11",
+    "custom_to_time11_",
+    "custom_from_time14",
+    "custom_to_time14",
 
-GLR_RECORDING_TIME_FIELDS: tuple[str, ...] = (
-	"custom_recording_time",
-	"custom_recording_time1",
-	"custom_recording_time2",
-	"custom_recording_time3",
-	"custom_recording_time4",
-	"custom_recording_time5",
-	"custom_recording_time6",
-	"custom_recording_time7",
-	"custom_recording_time8",
+    # --- ANF ---
+    "custom_from_time_anf1",
+    "custom_to_time1",
+    "custom_from_time_anf",
+    "custom_to_time_anf",
+    "custom_from_time_anf3",
+    "custom_to_time_anf3",
+    "custom_from_time_anf4",
+    "custom_to_time_anf4",
+    "custom_from_timeanf7",
+    "custom_to_time_anf7",
+    "custom_from_time__copy",
+    "custom_to_time__copy",
+    "custom_from_time_copy1",
+    "custom_to_time__copy1",
+    "custom_from_timeanf2",
+    "custom_to_timeanf2_copy",
+    "custom_from_timeanf15",
+    "custom_to_timeanf15_copy",
+    "custom_from_time16",
+    "custom_to_time16",
+    "custom_from_time17",
+    "custom_to_time17",
+    "custom_from_time18",
+    "custom_to_time18_",
+    "custom_from_time19",
+    "custom_to_time19",
 )
-
 
 def sync_weight_totals(doc: Document, _method: str | None = None) -> None:
 	"""Keep the target quantity aligned with bag weights without overriding production totals."""
@@ -109,19 +125,29 @@ def sync_weight_totals(doc: Document, _method: str | None = None) -> None:
 			row.completed_qty = prev_qty_map[key]
 
 
-def clear_glr_time_defaults(doc: Document, _method: str | None = None) -> None:
-	"""Overwrite Frappe's default 'current time' values for GLR fields on insert."""
-	if not doc or doc.operation != "GLR":
-		return
+def clear_glr_time_defaults(doc, _method=None):
+    if not doc :
+        return
 
-	for fieldname in (*GLR_TIME_FIELDS, *GLR_RECORDING_TIME_FIELDS):
-		if doc.meta.has_field(fieldname):
-			doc.set(fieldname, None)
+    for fieldname in ALL_TIME_FIELDS:
+        if doc.meta.has_field(fieldname):
+            doc.set(fieldname, None)
+
+@frappe.whitelist()
+def get_active_batches(doctype, txt, searchfield, start, page_len, filters):
+    return frappe.db.get_values(
+        "Batch",
+        filters={"status": "Active"},
+        fieldname=["name"],
+        as_list=True
+    )
 
 
 def on_submit(doc: Document, _method: str | None = None) -> None:
     delta = flt(getattr(doc, "total_completed_qty", 0))
     _update_workstation_hours(doc, delta)
+    # for auto stock entry (disabled)
+    # _create_finish_stock_entry(doc)
 
 
 def on_cancel(doc: Document, _method: str | None = None) -> None:
@@ -163,7 +189,6 @@ def _get_numeric_child_fields(doctype: str) -> list[str]:
 def _update_workstation_hours(doc: Document, delta: float) -> None:
     if not delta:
         return
-
     workstation = getattr(doc, "workstation", None)
     if not workstation:
         return
@@ -173,6 +198,51 @@ def _update_workstation_hours(doc: Document, delta: float) -> None:
     current_hours = flt(workstation_doc.custom_worked_hours or 0)
     workstation_doc.custom_worked_hours = max(current_hours + delta, 0)
     workstation_doc.save(ignore_permissions=True)
+
+
+def _create_finish_stock_entry(doc: Document) -> None:
+    """Create a draft Manufacture Stock Entry for the linked Work Order when JC is submitted.
+
+    # for auto stock entry
+    """
+    from erpnext.manufacturing.doctype.work_order.work_order import make_stock_entry
+
+    work_order = getattr(doc, "work_order", None)
+    qty_done = flt(getattr(doc, "total_completed_qty", 0)) or flt(getattr(doc, "for_quantity", 0))
+
+    if not work_order:
+        return
+
+    try:
+        wo_doc = frappe.get_doc("Work Order", work_order)
+    except Exception:
+        return
+
+    # Avoid duplicates if a draft Manufacture SE already exists for this Work Order
+    existing = frappe.db.exists(
+        "Stock Entry",
+        {"work_order": work_order, "purpose": "Manufacture", "docstatus": 0},
+    )
+    if existing:
+        return
+
+    pending_qty = max(flt(wo_doc.qty) - flt(wo_doc.produced_qty), 0)
+
+    # If JC doesn't carry quantities, fall back to Work Order pending
+    qty_candidates = [qty_done, pending_qty]
+    qty_positive = [q for q in qty_candidates if q > 0]
+    qty = max(qty_positive) if qty_positive else 0
+    if qty <= 0:
+        return
+
+    try:
+        se_doc = make_stock_entry(work_order, "Manufacture", qty=qty)
+        se_doc.insert(ignore_permissions=True)
+    except Exception:
+        frappe.log_error(
+            title="Auto Finish Stock Entry Failed",
+            message=f"Job Card {doc.name} could not create Stock Entry for Work Order {work_order}",
+        )
 
 
 def _ensure_shift_time_log(doc: Document) -> None:

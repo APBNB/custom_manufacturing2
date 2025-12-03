@@ -7,16 +7,21 @@ app_license = "unlicense"
 fixtures = [
     {
         "doctype": "Custom Field",
-        "filters": [["dt", "in", ["Work Order", "Job Card", "Workstation", "Shift", "Warehouse"]]],
+        "filters": [["dt", "in", ["Work Order", "Job Card", "Workstation", "Shift", "Warehouse","item","Material Request","Stock Entry","Batch"]]],
     },
     {
         "doctype": "Property Setter",
-        "filters": [["doc_type", "in", ["Work Order", "Job Card", "Workstation", "Shift", "Warehouse"]]],
+        "filters": [["doc_type", "in", ["Work Order","Material Request Item" ,"Job Card", "Workstation", "Shift", "Warehouse","item","stock entry","stock entry detail", "Material Request"]]],
     },
     {
         "doctype": "Webhook",
-        "filters": [["webhook_doctype", "in", ["Work Order", "Job Card", "Workstation", "Shift", "Warehouse"]]],
-    }
+        "filters": [["webhook_doctype", "in", ["Work Order", "Job Card", "Workstation", "Shift", "Warehouse","item"]]],
+    },
+    {
+        "doctype": "Client Script",
+        "filters": [["module", "in", ["Custom Manufacturing"]]],
+    },
+
 ]
 
 
@@ -48,16 +53,12 @@ fixtures = [
 doctype_js = {
     "Work Order": "public/js/work_order.js",
     "Job Card": "public/js/job_card.js",
+    "Material Request": "public/js/material_request.js",
 }
 
 override_doctype_class = {
 	"Work Order": "custom_manufacturing.override.work_order.WorkOrder",
-	"Job Card": "custom_manufacturing.override.job_card.JobCard"
-}
-scheduler_events = {
-    "daily": [
-        "custom_manufacturing.scheduler.job_card_cleanup.delete_old_open_job_cards"
-    ]
+	"Job Card": "custom_manufacturing.override.job_card.JobCard",
 }
 
 # include js, css files in header of web template
@@ -184,6 +185,15 @@ doc_events = {
         "on_cancel": "custom_manufacturing.doc_events.machine_maintenance.on_cancel",
         "on_trash": "custom_manufacturing.doc_events.machine_maintenance.on_trash",
     },
+    "Workstation": {
+        "on_update": "custom_manufacturing.doc_events.workstation.on_update",
+    },
+    "ToDo": {
+        "validate": "custom_manufacturing.doc_events.todo.validate",
+    },
+    "Stock Entry": {
+    "on_submit": "custom_manufacturing.doc_events.glr_batch_update.update_glr_batch",
+}
 }
 
 # Scheduled Tasks

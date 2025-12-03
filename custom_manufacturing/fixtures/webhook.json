@@ -65,14 +65,14 @@
  },
  {
   "background_jobs_queue": null,
-  "condition": "(doc.custom_worked_hours or 0) > (doc.custom_working_hours_before_replacement or 0)\n",
+  "condition": "(doc.custom_worked_hours or 0) > (doc.custom_working_hours_before_replacement or 0) and doc.custom_operation_linking == \"Cutting\"\n",
   "docstatus": 0,
   "doctype": "Webhook",
   "enable_security": 0,
   "enabled": 1,
   "is_dynamic_url": 0,
   "meets_condition": "Select a document to check if it meets conditions.",
-  "modified": "2025-11-12 16:08:11.550951",
+  "modified": "2025-11-21 14:55:43.133495",
   "name": "Workstation Manitenaince",
   "preview_document": null,
   "preview_request_body": "Select a document to preview request data",
@@ -92,19 +92,19 @@
     "value": "application/json"
    }
   ],
-  "webhook_json": "{\r\n  \"chat_id\": \"-5078874707\",\r\n  \"text\": \"🏭 Workstation <b>{{ doc.name }}</b> BLADE CHANGE NEEDED.\\n\\nWorked Hours: {{ doc.custom_worked_hours }}\\nLimit: {{ doc.custom_working_hours_before_replacement }}\\n\\n📈 The working hours of this machine has exceeded the limit\",\r\n  \"parse_mode\": \"HTML\"\r\n}\r\n",
+  "webhook_json": "{\r\n  \"chat_id\": \"-5078874707\",\r\n  \"text\": \"🏭 Workstation <b>{{ doc.name }}</b> BLADE CHANGE NEEDED.\\n\\nWorked Hours: {{ doc.custom_worked_hours }}\\nLimit: {{ doc.custom_working_hours_before_replacement }}\\n\\n📈 The working hours of this machine has exceeded the limit\\n\\n{% set mm = frappe.db.get_value('Machine Maintenance', {'machine_name': doc.name, 'docstatus': ['<', 2]}, 'name') %}{% set todo = frappe.db.get_value('ToDo', {'reference_type': 'Machine Maintenance', 'reference_name': mm}, 'name') %}🛠️ Maintenance: {{ mm or '-' }}\\n✅ ToDo: {{ todo or '-' }}\",\r\n  \"parse_mode\": \"HTML\"\r\n}\r\n",
   "webhook_secret": null
  },
  {
   "background_jobs_queue": null,
-  "condition": "doc.custom_breakdown_type or doc.custom_breakdown_reason\n",
+  "condition": "doc.custom_breakdown_type\n",
   "docstatus": 0,
   "doctype": "Webhook",
   "enable_security": 0,
   "enabled": 1,
   "is_dynamic_url": 0,
   "meets_condition": "Select a document to check if it meets conditions.",
-  "modified": "2025-11-12 16:25:30.642278",
+  "modified": "2025-11-25 13:06:59.007835",
   "name": "Breakdown Notification",
   "preview_document": null,
   "preview_request_body": "Select a document to preview request data",
@@ -124,7 +124,7 @@
     "value": "application/json"
    }
   ],
-  "webhook_json": "{\r\n  \"chat_id\": \"-5078874707\",\r\n  \"text\": \"🏭 Job Card <b>{{ doc.name }}</b> updated.\\nWork Order: {{ doc.work_order }}\\nOperation: {{ doc.operation }}\\nBreakDown Type: {{ doc.custom_breakdown_type }}\\nBreakdown Reason: {{ doc.custom_breakdown_reason }}\",\r\n  \"parse_mode\": \"HTML\"\r\n}\r\n",
+  "webhook_json": "{\r\n  \"chat_id\": \"-5078874707\",\r\n  \"text\": \"🏭 Job Card <b>{{ doc.name }}</b>.\\nWork Order: {{ doc.work_order }}\\nOperation: {{ doc.operation }}\\nBreakDown Type: {{ doc.custom_breakdown_type }}\\nBreakdown Reason: {{ doc.custom_breakdown_reason }}\",\r\n  \"parse_mode\": \"HTML\"\r\n}\r\n",
   "webhook_secret": null
  }
 ]

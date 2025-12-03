@@ -148,10 +148,10 @@ class JobCard(Document):
 		self.validate_weight_table()
 
 	def validate_weight_table(self):
-		if not self.get('custom_weight_per_bag'):
+		weight_table = self.get("custom_weight_per_bag") or []
+		if not weight_table:
 			return
-		
-		weight_table = self.get('custom_weight_per_bag')
+
 		weight_columns = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
 		
 		last_filled_row_idx = None
@@ -179,9 +179,9 @@ class JobCard(Document):
 				value = row.get(col) or 0
 				is_last_cell = (row.idx == last_filled_row_idx and col == last_filled_column)
 				
-				if value > 0 and not is_last_cell and value % 50 != 0:
+				if value > 0 and not is_last_cell and value != 150:
 					frappe.throw(
-						_("Row {0}, Column {1}: Value ({2}) must be a multiple of 50. Only the last filled cell in the table can have any value.").format(
+						_("Row {0}, Column {1}: Value ({2}) must be 150. Only the last filled cell in the table can have any value.").format(
 							row.idx, col, value
 						)
 					)
@@ -715,8 +715,23 @@ class JobCard(Document):
 	def on_submit(self):
 		self.validate_transfer_qty()
 		self.validate_job_card()
+		self.validate_batch_quantities()
 		self.update_work_order()
 		self.set_transferred_qty()
+		if self.status != "Completed":
+			return
+
+		if not self.work_order:
+			frappe.msgprint("No Work Order linked to this Job Card.")
+			return
+
+		qty_to_make = self.total_completed_qty or 0
+		if qty_to_make <= 0:
+			frappe.msgprint("No Completed Quantity found for creating Stock Entry.")
+			return
+
+		# auto stock entry disabled
+		return
 
 	def on_cancel(self):
 		self.update_work_order()
@@ -769,6 +784,42 @@ class JobCard(Document):
 				)
 			)
 
+		# Ensure washing and filtration rows are paired
+		self.validate_washing_filteration_rows()
+
+	def validate_batch_quantities(self):
+		rows = self.get("custom_batch") or []
+		if not rows:
+			return
+
+		total = 0.0
+		for row in rows:
+			row_qty = row.get("quantity")
+			if row_qty in (None, ""):
+				row_qty = row.get("qty")
+			total += flt(row_qty)
+
+		target = flt(self.for_quantity)
+		if abs(total - target) > 1e-9:
+			frappe.throw(
+				_("Total batch quantity {0} must equal Qty to Manufacture ({1}).").format(
+					bold(flt(total)), bold(target)
+				)
+			)
+
+	def validate_washing_filteration_rows(self):
+		washing_rows = self.get("custom_washing") or []
+		filter_rows = self.get("custom_filteration1") or []
+
+		wash_count = len([r for r in washing_rows if any((r.get(f) not in (None, "", 0) for f in r.as_dict()))])
+		filt_count = len([r for r in filter_rows if any((r.get(f) not in (None, "", 0) for f in r.as_dict()))])
+
+		if wash_count != filt_count:
+			frappe.throw(
+				_("Washing rows ({0}) and Filteration rows ({1}) must be the same count.").format(
+					bold(wash_count), bold(filt_count)
+				)
+			)
 	def set_expected_and_actual_time(self):
 		for child_table, start_field, end_field, time_required in [
 			("scheduled_time_logs", "expected_start_date", "expected_end_date", "time_required"),
@@ -1342,5 +1393,3 @@ def make_corrective_job_card(source_name, operation=None, for_operation=None, ta
 	)
 
 	return doclist
-
-	

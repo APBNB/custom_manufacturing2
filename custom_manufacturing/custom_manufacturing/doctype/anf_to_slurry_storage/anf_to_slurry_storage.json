@@ -1,0 +1,97 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-11-21 17:39:24.941464",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "batchlot_no",
+  "tank_from_time",
+  "tank_to_time",
+  "tank_duration",
+  "anf_workstation",
+  "tank_conductivity",
+  "job_card",
+  "washing_count"
+ ],
+ "fields": [
+  {
+   "columns": 2,
+   "fetch_from": "job_card.barcode",
+   "fieldname": "batchlot_no",
+   "fieldtype": "Link",
+   "label": "Batch/Lot No",
+   "options": "Batch",
+   "read_only": 1,
+   "width": "200"
+  },
+  {
+   "columns": 2,
+   "fieldname": "tank_from_time",
+   "fieldtype": "Time",
+   "label": "From Time",
+   "width": "2"
+  },
+  {
+   "columns": 2,
+   "fieldname": "tank_to_time",
+   "fieldtype": "Time",
+   "label": "To Time",
+   "width": "2"
+  },
+  {
+   "columns": 1,
+   "fieldname": "tank_duration",
+   "fieldtype": "Int",
+   "label": "Duration",
+   "width": "1"
+  },
+  {
+   "columns": 1,
+   "fieldname": "anf_workstation",
+   "fieldtype": "Link",
+   "label": "ANF Workstation",
+   "options": "Workstation",
+   "read_only": 1,
+   "width": "2"
+  },
+  {
+   "columns": 1,
+   "fieldname": "tank_conductivity",
+   "fieldtype": "Int",
+   "label": "Conductivity",
+   "width": "2"
+  },
+  {
+   "fieldname": "job_card",
+   "fieldtype": "Link",
+   "label": "Job card",
+   "options": "Job Card"
+  },
+  {
+   "columns": 1,
+   "fieldname": "washing_count",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Washing Count",
+   "read_only": 1,
+   "width": "2"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2025-11-26 15:09:37.235997",
+ "modified_by": "Administrator",
+ "module": "Custom Manufacturing",
+ "name": "ANF to Slurry Storage",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -173,7 +173,7 @@ class WorkOrder(Document):
 	def validate_operations_sequence(self):
 		if all([not op.sequence_id for op in self.operations]):
 			for op in self.operations:
-				op.sequence_id = op.idx
+				op.sequence_id = 1
 		else:
 			sequence_id = 1
 			for op in self.operations:

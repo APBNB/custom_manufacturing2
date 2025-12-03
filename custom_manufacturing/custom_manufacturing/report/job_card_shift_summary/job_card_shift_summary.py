@@ -31,6 +31,12 @@ def get_columns() -> list[dict]:
 			"width": 200,
 		},
 		{
+			"label": _("Manufactured Batch Numbers"),
+			"fieldname": "manufactured_batch_numbers",
+			"fieldtype": "Data",
+			"width": 200,
+		},
+		{
 			"label": _("Total Qty"),
 			"fieldname": "total_qty",
 			"fieldtype": "Float",
@@ -83,15 +89,24 @@ def get_data(filters: frappe._dict) -> list[dict]:
 
 		shift_lookup[jc.name] = (shift_key, item_code, jc.work_order)
 
-	work_order_batches = fetch_work_order_batches({jc.work_order for jc in job_cards})
+	work_order_batch_data = fetch_work_order_batches({jc.work_order for jc in job_cards})
 
-	item_batches: dict[str, set[str]] = {}
+	item_outward_batches: dict[str, set[str]] = {}
+	item_inward_batches: dict[str, set[str]] = {}
+	
 	for item_code, work_orders in item_work_orders.items():
-		batch_set: set[str] = set()
+		outward_batch_set: set[str] = set()
+		inward_batch_set: set[str] = set()
+		
 		for wo in work_orders:
-			batch_set.update(work_order_batches.get(wo, set()))
-		if batch_set:
-			item_batches[item_code] = batch_set
+			if wo in work_order_batch_data:
+				outward_batch_set.update(work_order_batch_data[wo].get("outward", set()))
+				inward_batch_set.update(work_order_batch_data[wo].get("inward", set()))
+		
+		if outward_batch_set:
+			item_outward_batches[item_code] = outward_batch_set
+		if inward_batch_set:
+			item_inward_batches[item_code] = inward_batch_set
 
 	scrap_rows = fetch_scrap_items([jc.name for jc in job_cards])
 	scrap_totals: dict[str, dict[str, dict[str, float]]] = {}
@@ -113,7 +128,8 @@ def get_data(filters: frappe._dict) -> list[dict]:
 			"shift_2_qty": item_totals[item_code].get("shift_2_qty", 0.0),
 			"shift_3_qty": item_totals[item_code].get("shift_3_qty", 0.0),
 		}
-		entry["batch_numbers"] = ", ".join(sorted(item_batches.get(item_code, set())))
+		entry["batch_numbers"] = ", ".join(sorted(item_outward_batches.get(item_code, set())))
+		entry["manufactured_batch_numbers"] = ", ".join(sorted(item_inward_batches.get(item_code, set())))
 		entry["total_qty"] = (
 			(entry.get("shift_1_qty") or 0.0)
 			+ (entry.get("shift_2_qty") or 0.0)
@@ -129,6 +145,7 @@ def get_data(filters: frappe._dict) -> list[dict]:
 				"shift_3_qty": scrap_totals[item_code][scrap_label].get("shift_3_qty", 0.0),
 			}
 			scrap_entry["batch_numbers"] = ""
+			scrap_entry["manufactured_batch_numbers"] = ""
 			scrap_entry["total_qty"] = (
 				(scrap_entry.get("shift_1_qty") or 0.0)
 				+ (scrap_entry.get("shift_2_qty") or 0.0)
@@ -187,7 +204,11 @@ def fetch_scrap_items(job_card_names: list[str]) -> Iterable[frappe._dict]:
 	)
 
 
-def fetch_work_order_batches(work_orders: set[str]) -> dict[str, set[str]]:
+def fetch_work_order_batches(work_orders: set[str]) -> dict[str, dict[str, set[str]]]:
+	"""
+	Fetch batch numbers categorized by transaction type (Outward/Inward).
+	Returns: {work_order: {"outward": set(), "inward": set()}}
+	"""
 	if not work_orders:
 		return {}
 
@@ -195,19 +216,30 @@ def fetch_work_order_batches(work_orders: set[str]) -> dict[str, set[str]]:
 
 	rows = frappe.db.sql(
 		"""
-		SELECT DISTINCT se.work_order, sed.batch_no
+		SELECT DISTINCT 
+			se.work_order, 
+			sed.batch_no,
+			se.stock_entry_type
 		FROM `tabStock Entry` se
 		INNER JOIN `tabStock Entry Detail` sed ON sed.parent = se.name
 		WHERE se.docstatus = 1
 			AND se.work_order IN %(work_orders)s
 			AND COALESCE(sed.batch_no, '') != ''
+		""",
+		{"work_orders": work_orders_tuple},
+		as_dict=True,
+	)
 
-		UNION
-
-		SELECT DISTINCT se.work_order, sbe.batch_no
+	bundle_rows = frappe.db.sql(
+		"""
+		SELECT DISTINCT 
+			se.work_order, 
+			sbe.batch_no,
+			sbb.type_of_transaction
 		FROM `tabStock Entry` se
 		INNER JOIN `tabStock Entry Detail` sed ON sed.parent = se.name
-		INNER JOIN `tabSerial and Batch Entry` sbe ON sbe.parent = sed.serial_and_batch_bundle
+		INNER JOIN `tabSerial and Batch Bundle` sbb ON sbb.name = sed.serial_and_batch_bundle
+		INNER JOIN `tabSerial and Batch Entry` sbe ON sbe.parent = sbb.name
 		WHERE se.docstatus = 1
 			AND se.work_order IN %(work_orders)s
 			AND COALESCE(sed.serial_and_batch_bundle, '') != ''
@@ -217,9 +249,25 @@ def fetch_work_order_batches(work_orders: set[str]) -> dict[str, set[str]]:
 		as_dict=True,
 	)
 
-	result: dict[str, set[str]] = {}
+	result: dict[str, dict[str, set[str]]] = {}
+	
 	for row in rows:
-		result.setdefault(row.work_order, set()).add(row.batch_no)
+		wo_data = result.setdefault(row.work_order, {"outward": set(), "inward": set()})
+		if row.stock_entry_type in ("Material Issue", "Material Transfer for Manufacture"):
+			wo_data["outward"].add(row.batch_no)
+		elif row.stock_entry_type == "Manufacture":
+			wo_data["inward"].add(row.batch_no)
+		else:
+			wo_data["outward"].add(row.batch_no)
+	
+	for row in bundle_rows:
+		wo_data = result.setdefault(row.work_order, {"outward": set(), "inward": set()})
+		if row.type_of_transaction == "Outward":
+			wo_data["outward"].add(row.batch_no)
+		elif row.type_of_transaction == "Inward":
+			wo_data["inward"].add(row.batch_no)
+		else:
+			wo_data["outward"].add(row.batch_no)
 
 	return result
 

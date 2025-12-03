@@ -87,6 +87,7 @@ def on_submit(doc, _method: str | None = None) -> None:
                     _apply_scrap_items(job_card, scrap_rows)
 
                 existing.add(key)
+    make_material_transfer_for_manufacture(doc)
 
 
 def _get_shifts() -> Iterable[frappe._dict]:
@@ -148,3 +149,38 @@ def _apply_scrap_items(job_card, scrap_rows: list[frappe._dict]) -> None:
 
     job_card.flags.ignore_validate_update_after_submit = True
     job_card.save(ignore_permissions=True)
+
+#create Material request enter when work order submitter
+@frappe.whitelist()
+def make_material_transfer_for_manufacture(material_request):
+    """Create Stock Entry (Material Transfer for Manufacture) from Material Request"""
+
+    doc = frappe.get_doc("Material Request", material_request)
+    if doc.custom_stock_entry:
+        frappe.throw(f"Stock Entry already created: {doc.custom_stock_entry}")
+    se = frappe.new_doc("Stock Entry")
+    se.stock_entry_type = "Material Transfer for Manufacture"
+    se.work_order = doc.work_order                   
+    se.custom_material_request = doc.name          
+
+    for item in doc.items:
+        if not item.from_warehouse or not item.warehouse:
+            frappe.throw(
+                f"Row {item.idx}: Both From Warehouse and Warehouse must be set."
+            )
+
+        se.append("items", {
+            "item_code": item.item_code,
+            "qty": item.qty,
+            "transfer_qty": item.qty,
+            "uom": getattr(item, "uom", None),
+            "stock_uom": getattr(item, "stock_uom", None),
+            "s_warehouse": item.from_warehouse,
+            "t_warehouse": item.warehouse,
+        })
+    se.insert(ignore_permissions=True)
+    doc.custom_stock_entry = se.name
+    doc.save(ignore_permissions=True)
+
+    return se
+

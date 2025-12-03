@@ -26,8 +26,6 @@ const GLR_TIME_FIELDS = [
 	"custom_from_time14",
 	"custom_to_time14",
 ];
-
-// Mapping of from-to fields to their duration fields
 const GLR_DURATION_MAPPINGS = [
 	{ from: "custom_from", to: "custom_to", duration: "custom_duration" },
 	{ from: "custom_from_time", to: "custom_to_time", duration: "custom_duration2" },
@@ -36,80 +34,105 @@ const GLR_DURATION_MAPPINGS = [
 	{ from: "custom_from_time11", to: "custom_to_time11_", duration: "custom_duration5" },
 	{ from: "custom_from_time14", to: "custom_to_time14", duration: "custom_duration7" },
 ];
+const GLR_TIME_FIELDS_ANF = [
+    "custom_from_time_anf1",
+    "custom_to_time1",
+    "custom_from_time_anf",
+    "custom_to_time_anf",
+];
+const GLR_DURATION_MAPPINGS_ANF = [
+	{ from: "custom_from_time_anf1", to: "custom_to_time1", duration: "custom_duration_anf9" },
+    { from: "custom_from_time_anf", to: "custom_to_time_anf", duration: "custom_duration_anf" },
+];
 
-const set_next_glr_time = (frm) => {
-	if (!frm) {
-		return;
-	}
-
-	if (frm.doc.docstatus !== 0) {
-		frappe.msgprint({
-			message: __("You can only record times while the Job Card is in Draft."),
-			indicator: "orange",
-		});
-		return;
-	}
-
-	const fieldname = GLR_TIME_FIELDS.find((name) => !frm.doc[name]);
-
-	if (!fieldname) {
-		frappe.msgprint({
-			message: __("All GLR time fields already have values."),
-			indicator: "green",
-		});
-		return;
-	}
-
-	const now = frappe.datetime.now_time();
-
-	frm.set_value(fieldname, now).then(() => {
-		const docfield = frappe.meta.get_docfield(frm.doctype, fieldname, frm.docname);
-		const label = docfield?.label || frappe.model.unscrub(fieldname);
-
-		frappe.show_alert({
-			message: __("Recorded {0} as {1}", [__(label), now]),
-			indicator: "green",
-		});
-
-		// After setting the time, check if we need to calculate duration
-		GLR_DURATION_MAPPINGS.forEach((mapping, index) => {
-			if (mapping.from === fieldname || mapping.to === fieldname) {
-				// Small delay to ensure the value is set
-				setTimeout(() => {
-					calculate_glr_duration(frm, mapping);
-				}, 100);
-			}
-		});
-	});
+const is_field_visible = (frm, fieldname) => {
+    const field = frm.get_field(fieldname);
+    return !!(field && $(field.wrapper).is(":visible"));
 };
+const set_next_glr_time = (frm, glr_field_list = [], duration_list = []) => {
+    if (!frm) return;
 
-const style_glr_record_button = (frm) => {
-	const field = frm.fields_dict?.custom_record_time;
+    if (frm.doc.docstatus !== 0) {
+        frappe.msgprint({
+            message: __("You can only record times while the Job Card is in Draft."),
+            indicator: "orange",
+        });
+        return;
+    }
+    const next_anf_field = GLR_TIME_FIELDS_ANF.find(f => !frm.doc[f]);
 
-	if (!field?.$wrapper || !field.$input) {
-		return;
-	}
+    if (next_anf_field) {
+        const now = frappe.datetime.now_time();
 
-	if (!field.$wrapper.hasClass("glr-record-styled")) {
-		const inputWrapper = field.$wrapper.find(".control-input-wrapper");
+        frm.set_value(next_anf_field, now).then(() => {
+            const label = frappe.meta.get_docfield(frm.doctype, next_anf_field)?.label || frappe.model.unscrub(next_anf_field);
 
-		inputWrapper.css({
-			display: "flex",
-			"justify-content": "flex-end",
-		});
+            frappe.show_alert({
+                message: __("Recorded {0} as {1}", [__(label), now]),
+                indicator: "green",
+            });
+            GLR_DURATION_MAPPINGS_ANF.forEach(mapping => {
+                if (mapping.from === next_anf_field || mapping.to === next_anf_field) {
+                    setTimeout(() => calculate_glr_duration(frm, mapping), 100);
+                }
+            });
+        });
 
-		field.$input
-			.removeClass("btn-default")
-			.addClass("btn-glr-record")
-			.css({
-				"background-color": "#000",
-				color: "#fff",
-				"font-weight": "700",
-				border: "1px solid #000",
-			});
+        return; 
+    }
+    const next_glr_field = glr_field_list.find(f => !frm.doc[f]);
 
-		field.$wrapper.addClass("glr-record-styled");
-	}
+    if (next_glr_field) {
+        if (!is_field_visible(frm, next_glr_field)) {
+            frappe.msgprint({
+                message: __("First fill the required fields before {0}.", [__(next_glr_field)]),
+                indicator: "pink",
+            });
+            return;
+        }
+        const now = frappe.datetime.now_time();
+        frm.set_value(next_glr_field, now).then(() => {
+            const label = frappe.meta.get_docfield(frm.doctype, next_glr_field)?.label || frappe.model.unscrub(next_glr_field);
+
+            frappe.show_alert({
+                message: __("Recorded {0} as {1}", [__(label), now]),
+                indicator: "green",
+            });
+            (duration_list || []).forEach((mapping) => {
+                if (mapping.from === next_glr_field || mapping.to === next_glr_field) {
+                    setTimeout(() => calculate_glr_duration(frm, mapping), 100);
+                }
+            });
+        });
+        return;
+    }
+
+    handle_washing_time_record(frm);
+};
+const style_glr_record_button = (frm, fieldname) => {
+    const field = frm.fields_dict?.[fieldname];
+
+    if (!field?.$wrapper || !field.$input) return;
+
+    if (!field.$wrapper.hasClass("glr-record-styled")) {
+        const inputWrapper = field.$wrapper.find(".control-input-wrapper");
+
+        inputWrapper.css({
+            display: "flex",
+            "justify-content": "flex-end",
+        });
+
+        field.$input
+            .removeClass("btn-default")
+            .addClass("btn-glr-record")
+            .css({
+                "background-color": "#000",
+                color: "#fff",
+                "font-weight": "700",
+                border: "1px solid #000",
+            });
+        field.$wrapper.addClass("glr-record-styled");
+    }
 };
 
 const calculate_glr_duration = (frm, mapping) => {
@@ -121,13 +144,70 @@ const calculate_glr_duration = (frm, mapping) => {
 		frm.set_value(mapping.duration, duration);
 	}
 };
+const find_duration_mapping = (fieldname, mapping_list) => {
+	return mapping_list.find(
+		(mapping) => mapping.from === fieldname || mapping.to === fieldname
+	);
+};
 
+const register_duration_handlers = (field_list, mapping_list) => {
+	field_list.forEach((fieldname) => {
+		const mapping = find_duration_mapping(fieldname, mapping_list);
+		if (mapping) {
+			frappe.ui.form.on("Job Card", {
+				[fieldname]: function(frm) {
+					calculate_glr_duration(frm, mapping);
+				}
+			});
+		}
+	});
+};
+register_duration_handlers(GLR_TIME_FIELDS, GLR_DURATION_MAPPINGS);
 const calculate_all_glr_durations = (frm) => {
 	GLR_DURATION_MAPPINGS.forEach((mapping, index) => {
 		calculate_glr_duration(frm, mapping);
 	});
 };
 
+// cutting weigth lot
+let skipped_blocks = [];
+function fill_next_weight_block(frm) {
+    let child_table_fieldname = 'custom_weight_per_bag';
+
+    if (!frm.doc[child_table_fieldname] || frm.doc[child_table_fieldname].length === 0) {
+        frappe.msgprint({
+            title: __('No Rows'),
+            indicator: 'red',
+            message: __('Please add at least one row in the LotNo x Bag No table first.')
+        });
+        return;
+    }
+    let weight_columns = ['1','2','3','4','5','6','7','8','9'];
+
+    for (let row of frm.doc[child_table_fieldname]) {
+        for (let col of weight_columns) {
+
+            if (skipped_blocks.some(b => b.rowname === row.name && b.col === col)) {
+                continue;  
+            }
+
+            if (!row[col] || row[col] === 0) {
+                frappe.model.set_value(row.doctype, row.name, col, 150);
+                frappe.show_alert({
+                    message: __("Filled Row {0}, Column {1} with 150", [row.idx, col]),
+                    indicator: "green"
+                });
+                return;
+            }
+        }
+    }
+
+    frappe.msgprint({
+        title: __('All Blocks Filled'),
+        indicator: 'blue',
+        message: __('All weight blocks are filled or skipped.')
+    });
+}
 frappe.ui.form.on("Job Card", {
 	setup: function (frm) {
 		frm.set_query("operation", function () {
@@ -161,13 +241,13 @@ frappe.ui.form.on("Job Card", {
 		frm.set_indicator_formatter("sub_operation", function (doc) {
 			if (doc.status == "Pending") {
 				return "red";
-			} else {
+			} else { 
 				return doc.status === "Complete" ? "green" : "orange";
 			}
 		});
 	},
 
-	refresh: function (frm) {
+	refresh: function(frm) {
 		frappe.flags.pause_job = 0;
 		frappe.flags.resume_job = 0;
 		let has_items = frm.doc.items && frm.doc.items.length;
@@ -194,7 +274,6 @@ frappe.ui.form.on("Job Card", {
 					__("Create")
 				);
 			}
-
 			// check if any row has untransferred materials
 			// in case of multiple items in JC
 			let to_transfer = frm.doc.items.some((row) => row.transferred_qty < row.required_qty);
@@ -204,7 +283,7 @@ frappe.ui.form.on("Job Card", {
 					__("Material Transfer"),
 					() => {
 						frm.trigger("make_stock_entry");
-					},
+			        	},
 					__("Create")
 				);
 			}
@@ -275,81 +354,51 @@ frappe.ui.form.on("Job Card", {
 				};
 			};
 		}
-
-		style_glr_record_button(frm);
 	},
-
 	onload_post_render: function (frm) {
-		style_glr_record_button(frm);
+		style_glr_record_button(frm, "custom_record_time");
+		style_glr_record_button(frm, "custom_record_time_");
+		style_glr_record_button(frm, "custom_record");
+		style_glr_record_button(frm, "custom_record_time_h");
+		style_glr_record_button(frm, "custom_record_");
+		style_glr_record_button(frm, "custom_record_time_a");
+
 	},
 
-	custom_record_time: function (frm) {
-		set_next_glr_time(frm);
-	},
+	custom_record_time(frm) {
+    set_next_glr_time(frm, GLR_TIME_FIELDS, GLR_DURATION_MAPPINGS);
+},
+custom_record_time_h(frm) {
+        handle_homogenization_time_record(frm);
+    },
 
-	custom_stream_pressure_kgcm2: function(frm) {
-		if (frm.doc.custom_stream_pressure_kgcm2) {
-			const now = frappe.datetime.now_time().substring(0, 5); // Get HH:MM format
-			frm.set_value('custom_recording_time', now);
-		}
-	},
+custom_record_time_(frm) {
+    set_next_glr_time(frm, GLR_TIME_FIELDS_ANF, GLR_DURATION_MAPPINGS_ANF);
+},
 
-	custom_stream_pressure_kgcm21: function(frm) {
-		if (frm.doc.custom_stream_pressure_kgcm21) {
-			const now = frappe.datetime.now_time().substring(0, 5);
-			frm.set_value('custom_recording_time1', now);
-		}
-	},
+	custom_fill_weigth: function(frm) {
+	fill_next_weight_block(frm);
+},
+custom_skip: function(frm) {
+    let child_table_fieldname = 'custom_weight_per_bag';
+    let weight_columns = ['1','2','3','4','5','6','7','8','9'];
 
-	custom_stream_pressure_kgcm22: function(frm) {
-		if (frm.doc.custom_stream_pressure_kgcm22) {
-			const now = frappe.datetime.now_time().substring(0, 5);
-			frm.set_value('custom_recording_time2', now);
-		}
-	},
-
-	custom_stream_pressure_kgcm23: function(frm) {
-		if (frm.doc.custom_stream_pressure_kgcm23) {
-			const now = frappe.datetime.now_time().substring(0, 5);
-			frm.set_value('custom_recording_time3', now);
-		}
-	},
-
-	custom_stream_pressure_kgcm24: function(frm) {
-		if (frm.doc.custom_stream_pressure_kgcm24) {
-			const now = frappe.datetime.now_time().substring(0, 5);
-			frm.set_value('custom_recording_time4', now);
-		}
-	},
-
-	custom_stream_pressure_kgcm25: function(frm) {
-		if (frm.doc.custom_stream_pressure_kgcm25) {
-			const now = frappe.datetime.now_time().substring(0, 5);
-			frm.set_value('custom_recording_time5', now);
-		}
-	},
-
-	custom_stream_pressure_kgcm26: function(frm) {
-		if (frm.doc.custom_stream_pressure_kgcm26) {
-			const now = frappe.datetime.now_time().substring(0, 5);
-			frm.set_value('custom_recording_time6', now);
-		}
-	},
-
-	custom_stream_pressure_kgcm27: function(frm) {
-		if (frm.doc.custom_stream_pressure_kgcm27) {
-			const now = frappe.datetime.now_time().substring(0, 5);
-			frm.set_value('custom_recording_time7', now);
-		}
-	},
-
-	custom_stream_pressure_kgcm28: function(frm) {
-		if (frm.doc.custom_stream_pressure_kgcm28) {
-			const now = frappe.datetime.now_time().substring(0, 5);
-			frm.set_value('custom_recording_time8', now);
-		}
-	},
-
+    outer:
+    for (let row of frm.doc[child_table_fieldname] || []) {
+        for (let col of weight_columns) {
+            if ((!row[col] || row[col] === 0) && 
+                !skipped_blocks.some(b => b.rowname === row.name && b.col === col)) 
+            {
+                skipped_blocks.push({ rowname: row.name, col: col });
+                frappe.show_alert({
+                    message: __("Skipped Row {0} Col {1}", [row.idx, col]),
+                    indicator: "orange"
+                });
+                break outer;
+            }
+        }
+    }
+},
 	setup_quality_inspection: function (frm) {
 		let quality_inspection_field = frm.get_docfield("quality_inspection");
 		quality_inspection_field.get_route_options_for_new_doc = function (frm) {
@@ -622,7 +671,6 @@ frappe.ui.form.on("Job Card", {
 				.find(".seconds")
 				.text(seconds < 10 ? "0" + seconds.toString() : seconds.toString());
 		}
-
 		function initialiseTimer() {
 			const interval = setInterval(function () {
 				var current = setCurrentIncrement();
@@ -724,45 +772,24 @@ frappe.ui.form.on("Job Card", {
 
 		refresh_field("total_completed_qty");
 	},
-
-	custom_from: function(frm) {
-		calculate_glr_duration(frm, GLR_DURATION_MAPPINGS[0]);
-	},
-	custom_to: function(frm) {
-		calculate_glr_duration(frm, GLR_DURATION_MAPPINGS[0]);
-	},
-	custom_from_time: function(frm) {
-		calculate_glr_duration(frm, GLR_DURATION_MAPPINGS[1]);
-	},
-	custom_to_time: function(frm) {
-		calculate_glr_duration(frm, GLR_DURATION_MAPPINGS[1]);
-	},
-	custom_from_time_7: function(frm) {
-		calculate_glr_duration(frm, GLR_DURATION_MAPPINGS[2]);
-	},
-	custom_to_time_7: function(frm) {
-		calculate_glr_duration(frm, GLR_DURATION_MAPPINGS[2]);
-	},
-	custom_from_time9: function(frm) {
-		calculate_glr_duration(frm, GLR_DURATION_MAPPINGS[3]);
-	},
-	custom_to_time9: function(frm) {
-		calculate_glr_duration(frm, GLR_DURATION_MAPPINGS[3]);
-	},
-	custom_from_time11: function(frm) {
-		calculate_glr_duration(frm, GLR_DURATION_MAPPINGS[4]);
-	},
-	custom_to_time11_: function(frm) {
-		calculate_glr_duration(frm, GLR_DURATION_MAPPINGS[4]);
-	},
-	custom_from_time14: function(frm) {
-		calculate_glr_duration(frm, GLR_DURATION_MAPPINGS[5]);
-	},
-	custom_to_time14: function(frm) {
-		calculate_glr_duration(frm, GLR_DURATION_MAPPINGS[5]);
-	},
+	
+	custom_acid_solution_ampere_a: function(frm) {
+        calculate_ampere_difference(frm);
+    },
+    custom_note_ampereb: function(frm) {
+        calculate_ampere_difference(frm);
+    }
 });
+function calculate_ampere_difference(frm) {
+    let a = frm.doc.custom_acid_solution_ampere_a || 0;
+    let b = frm.doc.custom_note_ampereb || 0;
 
+    if (a && b) {
+        frm.set_value("custom_note_ampere_difference_ba", (b - a).toFixed(2));
+    } else {
+        frm.set_value("custom_note_ampere_difference_ba", null);
+    }
+}
 frappe.ui.form.on("Job Card Time Log", {
 	completed_qty: function (frm) {
 		frm.events.set_total_completed_qty(frm);
@@ -789,7 +816,6 @@ function get_minutes_diff(time1, time2) {
 	return diff;
 }
 
-
 let weight_fields = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
 let handlers = {};
 
@@ -798,34 +824,258 @@ weight_fields.forEach(field => {
 		calculate_total_weight(frm, cdt, cdn);
 	};
 });
-
 frappe.ui.form.on("LotNo x Bag No", handlers);
 
 function calculate_total_weight(frm, cdt, cdn) {
-	let row = locals[cdt][cdn];
-	let weight_columns = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
-	
-	weight_columns.forEach(col => {
-		let value = row[col] || 0;
-		if (value > 150) {
-			frappe.msgprint({
-				title: __('Invalid Value'),
-				indicator: 'red',
-				message: __('Row {0}, Column {1}: Maximum allowed value is 150. Value entered: {2}', [row.idx, col, value])
-			});
-			frappe.model.set_value(cdt, cdn, col, 150);
-		}
-	});
-	
-	let total = weight_columns.reduce((sum, col) => sum + (row[col] || 0), 0);
-	
-	frappe.model.set_value(cdt, cdn, 'total', total);
-	
-	if (total > 1000) {
-		frappe.msgprint({
-			title: __('Warning'),
-			indicator: 'red',
-			message: __('Row {0}: Total weight ({1}) exceeds 1000!', [row.idx, total])
-		});
-	}
+    let row = locals[cdt][cdn];
+    let weight_columns = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
+    let changed_column = null;
+    
+    weight_columns.forEach(col => {
+        let value = row[col] || 0;
+        if (value > 150) {
+            frappe.msgprint({
+                title: __('Invalid Value'),
+                indicator: 'red',
+                message: __('Row {0}, Column {1}: Maximum allowed value is 150. Value entered: {2}', [row.idx, col, value])
+            });
+            frappe.model.set_value(cdt, cdn, col, 150);
+            changed_column = col;
+        }
+    });
+    
+    let total = weight_columns.reduce((sum, col) => sum + (row[col] || 0), 0);
+    
+    if (total > 1000) {
+        let excess = total - 1000;
+        
+        if (!changed_column) {
+            for (let i = weight_columns.length - 1; i >= 0; i--) {
+                if (row[weight_columns[i]] > 0) {
+                    changed_column = weight_columns[i];
+                    break;
+                }
+            }
+        }
+        
+        if (changed_column) {
+            let current_value = row[changed_column] || 0;
+            let new_value = Math.max(0, current_value - excess);
+            
+            frappe.msgprint({
+                title: __('Total Limit Reached'),
+                indicator: 'orange',
+                message: __('Row {0}: Total cannot exceed 1000. Column {1} adjusted from {2} to {3}', 
+                    [row.idx, changed_column, current_value, new_value])
+            });
+            
+            frappe.model.set_value(cdt, cdn, changed_column, new_value);
+            total = 1000; 
+        }
+    }
+    
+    frappe.model.set_value(cdt, cdn, 'total', total);
 }
+
+// from and to time data recording in glr
+frappe.ui.form.on("Recording Data GLR", {
+    steam_pressure_kgcm2: function(frm, cdt, cdn) {
+        let row = locals[cdt][cdn];
+        if (row.steam_pressure_kgcm2) {
+            let now = frappe.datetime.now_time().substr(0, 5);
+            frappe.model.set_value(cdt, cdn, "recording_time", now);
+        }
+    }
+});
+
+// anf to slurry storage  and fetch 
+frappe.ui.form.on("Linking Jobcard", {
+    jobcard: function(frm, cdt, cdn) {
+        let row = locals[cdt][cdn];
+        if (!row.jobcard) return;
+
+        frappe.call({
+            method: "frappe.client.get",
+            args: {
+                doctype: "Job Card",
+                name: row.jobcard
+            },
+            callback: function(r) {
+                if (!r.message) return;
+
+                const source_jobcard = r.message;
+
+                (source_jobcard.custom_batch || []).forEach(batch_row => {
+
+                    // Add to custom_batch if field is visible
+                    if (is_field_visible(frm, "custom_batch")) {
+                        let b_row = frm.add_child("custom_batch");
+                        b_row.batch = batch_row.batch;
+                        b_row.quantity = source_jobcard.for_quantity;
+                    }
+
+                    // Add to custom_slurry_storage if field is visible
+                    if (is_field_visible(frm, "custom_slurry_storage")) {
+                        let s_row = frm.add_child("custom_slurry_storage");
+                        s_row.batchlot_no = batch_row.batch;
+                        s_row.job_card = row.jobcard;
+                        s_row.anf_workstation = source_jobcard.workstation;
+                    }
+
+                    // Add to custom_homogenization_log_sheet1 if field is visible
+                    if (is_field_visible(frm, "custom_homogenization_log_sheet1")) {
+                        let h_row = frm.add_child("custom_homogenization_log_sheet1");
+                        h_row.batchlot_no = batch_row.batch;
+                    }
+
+                });
+
+                // Refresh only the visible table fields
+                const fields_to_refresh = [];
+                ["custom_batch", "custom_slurry_storage", "custom_homogenization_log_sheet1"].forEach(f => {
+                    if (is_field_visible(frm, f)) fields_to_refresh.push(f);
+                });
+                frm.refresh_fields(fields_to_refresh);
+            }
+			
+        });
+    }
+});
+
+// filter for custom_job_card field (completed JCs in last 24h)
+frappe.ui.form.on("Job Card", {
+	setup(frm) {
+		const grid = frm.get_field("custom_job_card")?.grid;
+		if (!grid) return;
+		const jobcard_field = grid.get_field("jobcard");
+		if (!jobcard_field) return;
+		jobcard_field.get_query = function () {
+			return {
+				query: "custom_manufacturing.doc_events.jobcard_queries.completed_jobcards_within_last_day",
+			};
+		};
+	}
+});
+
+//anf from time , to time and duration
+frappe.ui.form.on("Washing", {
+    from_time(frm, cdt, cdn) {
+		console.log("fr");
+		
+        calculate_duration(frm, cdt, cdn);
+    },
+    to_time(frm, cdt, cdn) {
+        calculate_duration(frm, cdt, cdn);
+    }
+});
+frappe.ui.form.on("Filteration", {
+    from_time(frm, cdt, cdn) {
+        calculate_duration(frm, cdt, cdn);
+    },
+    to_time(frm, cdt, cdn) {
+        calculate_duration(frm, cdt, cdn);
+    }
+});
+function calculate_duration(frm, cdt, cdn_or_row) {
+    let row = typeof cdn_or_row === "string" ? locals[cdt][cdn_or_row] : cdn_or_row;
+    if (!row) return;
+
+    if (row.from_time && row.to_time) {
+        let minutes = get_minutes_diff(row.from_time, row.to_time);
+
+        row.duration = minutes;
+
+        frm.refresh_field(cdt);
+    }
+}
+let washing_filter_state = {
+    table: "custom_washing", 
+    field: "from_time"
+};
+function handle_washing_time_record(frm) {
+    const now = frappe.datetime.now_time();
+    const tables = ["custom_washing", "custom_filteration1"];
+    let rows = frm.doc[washing_filter_state.table] || [];
+    let last = rows.length ? rows[rows.length - 1] : null;
+    let row;
+    const isNewRow = !last || (washing_filter_state.field === "from_time" && last.to_time) || (!last.from_time && washing_filter_state.field === "to_time");
+    row = isNewRow ? frm.add_child(washing_filter_state.table) : last;
+    row[washing_filter_state.field] = now;
+    frm.refresh_field(washing_filter_state.table);
+    if (row.from_time && row.to_time) {
+        calculate_duration(frm, washing_filter_state.table, row);
+    }
+    frappe.show_alert({
+        message: `${washing_filter_state.table === "custom_washing" ? "Washing" : "Filteration"} ${capitalize(washing_filter_state.field.replace("_", " "))
+} recorded: ${now}`,
+        indicator: "green"
+    });
+    if (washing_filter_state.field === "from_time") {
+        washing_filter_state.field = "to_time";
+    } else {
+        let nextIndex = (tables.indexOf(washing_filter_state.table) + 1) % tables.length;
+        washing_filter_state.table = tables[nextIndex];
+        washing_filter_state.field = "from_time";
+    }
+}
+function capitalize(str) {
+    if (!str) return "";
+    return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+//homogenization time filling
+let homogenization_state = {
+    table: "custom_homogenization_log_sheet1",
+    field: "from_time"
+};
+function handle_homogenization_time_record(frm) {
+    const now = frappe.datetime.now_time();
+    let rows = frm.doc[homogenization_state.table] || [];
+    let last = rows.length ? rows[rows.length - 1] : null;
+
+    const isNewRow = !last || (homogenization_state.field === "from_time" && last.to_time) || (!last.from_time && homogenization_state.field === "to_time");
+    let row = isNewRow ? frm.add_child(homogenization_state.table) : last;
+
+    row[homogenization_state.field] = now;
+
+    if (row.from_time && row.to_time) {
+        calculate_duration(frm, homogenization_state.table, row);
+    }
+    frm.refresh_field(homogenization_state.table);
+    frappe.show_alert({
+        message: `Homogenization ${capitalize(homogenization_state.field)} recorded: ${now}`,
+        indicator: "green"
+    });
+    homogenization_state.field = homogenization_state.field === "from_time" ? "to_time" : "from_time";
+}
+frappe.ui.form.on("Homogenization", {
+    from_time(frm, cdt, cdn) {
+        calculate_duration(frm, "custom_homogenization_log_sheet1", locals[cdt][cdn]);
+    },
+    to_time(frm, cdt, cdn) {
+        calculate_duration(frm, "custom_homogenization_log_sheet1", locals[cdt][cdn]);
+    }
+});
+
+// to update washing count in the slurry storage table
+frappe.ui.form.on("Washing", {
+    custom_washing_add: function(frm) {
+        update_washing_count(frm);
+    },
+    custom_washing_remove: function(frm) {
+        update_washing_count(frm);
+    }
+});
+function update_washing_count(frm) {
+    let count = frm.doc.custom_washing?.length || 0;
+
+    (frm.doc.custom_slurry_storage || []).forEach((row, i) => {
+        row.washing_count = count;
+    });
+    frm.refresh_field("custom_slurry_storage");
+}
+frappe.ui.form.on("Job Card", {
+    refresh() {
+        $(".layout-side-section, .form-sidebar").hide();
+    }
+});
