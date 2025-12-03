@@ -6,6 +6,9 @@ app_email = "daksh@gmail.com"
 app_license = "unlicense"
 fixtures = [
     {
+        "dt": "Print Format"
+    },
+    {
         "doctype": "Custom Field",
         "filters": [["dt", "in", ["Work Order", "Job Card", "Workstation", "Shift", "Warehouse","item","Material Request","Stock Entry","Batch"]]],
     },
